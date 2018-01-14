@@ -25,7 +25,7 @@ geneName = ""
 phenoDesc = ""
 hgnc = ""
 entrezGeneID = ""
-genes = {}
+geneData = {}
 # extract the newline character
 while True:
 	try:
@@ -41,78 +41,79 @@ while True:
 		else :
 			entrezGeneID = info	
 			col = 0
-		
-			genes[entrezGeneID] = {} if phenoDesc == '' else {phenoDesc}
-			genes[entrezGeneID]['Phenotype Description'] = [phenoDesc] if bool(phenoDesc.strip()) else []
-			genes[entrezGeneID]['Gene Name'] = geneName			
-			genes[entrezGeneID]['HGNC ID'] = hgnc
-			genes[entrezGeneID]['Gene Stable ID'] = geneStableID
-			genes[entrezGeneID]['Found in NCBI'] = False
+		    
+			geneData['Phenotype Description'] = [phenoDesc] if bool(phenoDesc.strip()) else []
+			geneData['Gene Name'] = geneName			
+			geneData['HGNC ID'] = hgnc
+			geneData['Gene Stable ID'] = geneStableID
+			geneData['Found in NCBI'] = False
 			countFile.write(entrezGeneID)
+
+			# web scrape
+			r = requests.get("https://www.ncbi.nlm.nih.gov/gene/" + entrezGeneID)
+			soup = BeautifulSoup(r.content, "lxml")
+
+			# validates the geneStableID
+			title =  soup.find("title");
+			noItemFound = re.compile("No items found")
+
+			if noItemFound.search(title.text) is None:
+				
+				summary = soup.find('dl', {"id":'summaryDl'})
+				key = ''
+				officialSymbol = re.compile("Official\s+Symbol")
+				officialFullName = re.compile("Official\s+Full\s+Name")
+				
+				try:
+					for c in summary.children:
+						if c.name == 'dt':
+							if(officialSymbol.search(c.text) is not None):
+								key = 'Official Symbol'
+							elif(officialFullName.search(c.text) is not None):
+								key = 'Official Full Name'
+							else:
+								key = c.text
+
+						elif c.name == 'dd':
+						 	if key == 'Also known as':
+						 		geneData[key] = c.text.split('; ')	
+						 		geneData['Found in NCBI'] = geneData['Gene Name'] in geneData[key] 
+						   
+					 		elif key == 'See related' or key == 'Orthologs':
+					 			geneData[key] = {}
+					 			for child in c.children:
+					 				try:
+					 					k = str(child.contents[0].strip(';'))
+					 					geneData[key][k] = child['href']
+					 				except AttributeError:
+					 					continue
+			 				else:
+			 					info = c.contents[0]
+			 					if info == '\n':
+			 						geneData[key] = c.contents[1].text	
+			 					else:
+			 						geneData[key] = info
+					try:
+						if not geneData['Found in NCBI']:
+							geneData['Found in NCBI']  = geneData['Gene Name'] == geneData['Official Symbol'] 
+					except KeyError:
+						errorFile.write(entrezGeneID + " no Official Symbol")
+
+				except AttributeError:
+					errorFile.write(entrezGeneID)
+					errorFile.write(summary.prettify())
+
+			print('"' + entrezGeneID + '":')
+			print(json.dumps(geneData, sort_keys=False, indent=4))
+
+			geneData = {}
+
 		# update col
 		col += 1
 			
 	except EOFError:
 		break
 
-# scrape web
-for g in genes.keys():
-	r = requests.get("https://www.ncbi.nlm.nih.gov/gene/" + g)
-	soup = BeautifulSoup(r.content, "lxml")
-
-	# validates the geneStableID
-	title =  soup.find("title");
-	noItemFound = re.compile("No items found")
-
-	if noItemFound.search(title.text) is None:
-		
-		summary = soup.find('dl', {"id":'summaryDl'})
-		key = ''
-		officialSymbol = re.compile("Official\s+Symbol")
-		officialFullName = re.compile("Official\s+Full\s+Name")
-		
-		try:
-			for c in summary.children:
-				if c.name == 'dt':
-					if(officialSymbol.search(c.text) is not None):
-						key = 'Official Symbol'
-					elif(officialFullName.search(c.text) is not None):
-						key = 'Official Full Name'
-					else:
-						key = c.text
-
-				elif c.name == 'dd':
-				 	if key == 'Also known as':
-				 		genes[g][key] = c.text.split('; ')	
-				 		genes[g]['Found in NCBI'] = genes[g]['Gene Name'] in genes[g][key] 
-				   
-			 		elif key == 'See related' or key == 'Orthologs':
-			 			genes[g][key] = {}
-			 			for child in c.children:
-			 				try:
-			 					k = str(child.contents[0].strip(';'))
-			 					genes[g][key][k] = child['href']
-			 				except AttributeError:
-			 					continue
-	 				else:
-	 					info = c.contents[0]
-	 					if info == '\n':
-	 						genes[g][key] = c.contents[1].text	
-	 					else:
-	 						genes[g][key] = info
-			try:
-				if not genes[g]['Found in NCBI']:
-					genes[g]['Found in NCBI']  = genes[g]['Gene Name'] == genes[g]['Official Symbol'] 
-			except KeyError:
-				continue
-
-		except AttributeError:
-			errorFile.write(g)
-			errorFile.write(summary.prettify())
-			continue		
-
-	print('"' + str(g) + '":')
-	print(json.dumps(genes[g], sort_keys=False, indent=4))
 		
 errorFile.close()
 countFile.close()
