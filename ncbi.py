@@ -1,3 +1,4 @@
+#!/Library/Frameworks/Python.framework/Versions/3.6/bin/python3
 from bs4 import BeautifulSoup
 import string
 import re
@@ -6,7 +7,7 @@ import json
 from sys import stdin
 
 """
-   The file all-genes.txt contains gene data:
+   The file ncbi_genes_formatted.txt contains gene data:
       1. gene stable id
       2. gene name
       3. phenotype description
@@ -17,6 +18,7 @@ from sys import stdin
 
 """
 errorFile = open("ncbi-errors",'w')
+countFile = open("count","w")
 col = 1
 geneStableID = ""
 geneName = "" 
@@ -39,21 +41,17 @@ while True:
 		else :
 			entrezGeneID = info	
 			col = 0
-
-			if entrezGeneID in genes.keys() :
-				genes[entrezGeneID].get('Phenotype Description').append(phenoDesc)
-
-			else:
-				genes[entrezGeneID] = {}
-				genes[entrezGeneID]['Phenotype Description'] = [phenoDesc] if bool(phenoDesc.strip()) else []
-				genes[entrezGeneID]['Gene Name'] = geneName			
-				genes[entrezGeneID]['HGNC ID'] = hgnc
-				genes[entrezGeneID]['Gene Stable ID'] = geneStableID
-
+		
+			genes[entrezGeneID] = {} if phenoDesc == '' else {phenoDesc}
+			genes[entrezGeneID]['Phenotype Description'] = [phenoDesc] if bool(phenoDesc.strip()) else []
+			genes[entrezGeneID]['Gene Name'] = geneName			
+			genes[entrezGeneID]['HGNC ID'] = hgnc
+			genes[entrezGeneID]['Gene Stable ID'] = geneStableID
+			genes[entrezGeneID]['Found in NCBI'] = False
+			countFile.write(entrezGeneID)
 		# update col
 		col += 1
 			
-
 	except EOFError:
 		break
 
@@ -74,7 +72,6 @@ for g in genes.keys():
 		officialFullName = re.compile("Official\s+Full\s+Name")
 		
 		try:
-			genes[g]['Found in NCBI'] = False
 			for c in summary.children:
 				if c.name == 'dt':
 					if(officialSymbol.search(c.text) is not None):
@@ -104,22 +101,21 @@ for g in genes.keys():
 	 					else:
 	 						genes[g][key] = info
 			try:
-				genes[g]['Found in NCBI'] = genes[g]['Gene Name'] == genes[g]['Official Symbol'] or genes[g]['Found in NCBI'] 
+				if not genes[g]['Found in NCBI']:
+					genes[g]['Found in NCBI']  = genes[g]['Gene Name'] == genes[g]['Official Symbol'] 
 			except KeyError:
 				continue
 
 		except AttributeError:
-			write(g)
-			write(summary.prettify())
+			errorFile.write(g)
+			errorFile.write(summary.prettify())
 			continue		
-	else:
-		genes[g]['Found in NCBI'] = False
 
-	
-# print data in json format	
-print(json.dumps(genes, sort_keys=False, indent=4))
+	print('"' + str(g) + '":')
+	print(json.dumps(genes[g], sort_keys=False, indent=4))
 		
 errorFile.close()
+countFile.close()
 
 
 
