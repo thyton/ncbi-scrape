@@ -6,7 +6,7 @@ import json
 from sys import stdin
 
 """
-   The file ncbi_genes_formatted.txt contains gene data:
+   The file all-genes.txt contains gene data:
       1. gene stable id
       2. gene name
       3. phenotype description
