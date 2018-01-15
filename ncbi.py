@@ -18,7 +18,7 @@ from sys import stdin
 
 """
 errorFile = open("ncbi-errors",'w')
-countFile = open("count","w")
+outFile = open("ncbi.out","w")
 col = 1
 geneStableID = ""
 geneName = "" 
@@ -41,13 +41,12 @@ while True:
 		else :
 			entrezGeneID = info	
 			col = 0
-		    
 			geneData['Phenotype Description'] = [phenoDesc] if bool(phenoDesc.strip()) else []
 			geneData['Gene Name'] = geneName			
 			geneData['HGNC ID'] = hgnc
 			geneData['Gene Stable ID'] = geneStableID
 			geneData['Found in NCBI'] = False
-			countFile.write(entrezGeneID)
+			
 
 			# web scrape
 			r = requests.get("https://www.ncbi.nlm.nih.gov/gene/" + entrezGeneID)
@@ -103,8 +102,8 @@ while True:
 					errorFile.write(entrezGeneID)
 					errorFile.write(summary.prettify())
 
-			print('"' + entrezGeneID + '":')
-			print(json.dumps(geneData, sort_keys=False, indent=4))
+			outFile.write('"' + entrezGeneID + '":')
+			outFile.write(json.dumps(geneData, sort_keys=False, indent=4))
 
 			geneData = {}
 
@@ -116,7 +115,7 @@ while True:
 
 		
 errorFile.close()
-countFile.close()
+outFile.close()
 
 
 
